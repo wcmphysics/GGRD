@@ -12,3 +12,5 @@ is_high_dilute_mode_at_nh3_pulse,any,int,is_high_dilute_mode_at_nh3_pulse,dilute
 nh3_loop,any,float,nh3_loop,loop
 chamber_pressure,any,float,chamber_pressure,chamber
 lower_chamber_flow_rate,any,float,lower_chamber_flow_rate
+vfb,any,float,Vfb,flat_band_voltage
+cet,any,float,CET
