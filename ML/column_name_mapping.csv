@@ -1,0 +1,14 @@
+standard_name,use_case,data_type,candidate1,candidate2,candidate3,candidate4
+cycle,any,float,cycle,,,
+temperature,any,float,temperature
+qtime,any,float,qtime
+ticl4_pulse_time,any,float,ticl4_pulse_time,ticl4_pulse,
+ticl4_purge_time,any,float,ticl4_purge_time,ticl4_purge
+ticl4_carrier_ar_pressure,any,float,carrier_pressure,carrier
+nh3_pulse_time,any,float,nh3_pulse_time,nh3_pulse
+nh3_purge_time,any,float,nh3_purge_time,nh3_purge
+nh3_pressure,any,float,nh3_pressure
+is_high_dilute_mode_at_nh3_pulse,any,int,is_high_dilute_mode_at_nh3_pulse,dilute_mode
+nh3_loop,any,float,nh3_loop,loop
+chamber_pressure,any,float,chamber_pressure,chamber
+lower_chamber_flow_rate,any,float,lower_chamber_flow_rate
