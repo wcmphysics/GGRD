@@ -35,16 +35,26 @@ class FeatureStore:
         return list(self.df.columns)
     
     def _get_ftr(self, ftr_name: str) -> pd.Series:
-        # return as pandas series for easier computation (like df['A']+df['B'])
-        
+        """
+        Return the values of the specified feature. 
+        It could be a single-row or multi-row series depending on the number of row in the dataframe "self.df".
+
+        Args:
+            ftr_name (str): the name of the feature
+
+        Raises:
+            ValueError: Missing values that should be given by default.
+            NotImplementedError: Missing a computation method for the requested feature.
+
+        Returns:
+            pd.Series: the requested feature as a series (for easier computation like df['A']+df['B']).
+        """        
         # Cache found
         if ftr_name in self.df.columns:
             return self.df[ftr_name]
-
         # Cache missed - polynomial features
         if ' ' in ftr_name or '^' in ftr_name: 
             self.df[ftr_name] = self._get_polynomial_ftr(ftr_name)
-
         # Cache missed - non-polynomial features (' ' and '^' not allowed in the feature name )
         else: 
             if ftr_name in self.given_features:
@@ -88,12 +98,10 @@ class FeatureStore:
                  )/60
         return result
 
-
     # level 2 features
-    def _compute_intermixing(self):
+    def _compute_intermixing(self) -> pd.Series:
         pass
-
-    
+   
 
 
 if __name__ == "__main__":
