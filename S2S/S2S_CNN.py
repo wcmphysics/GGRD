@@ -13,7 +13,7 @@ class MultiFoldResidualBlock(nn.Module):
     def __init__(self, channels, num_folds=3):
         super().__init__()
         self.folds = nn.ModuleList([
-            nn.Sequential(
+            nn.Sequential(  
                 nn.Conv1d(channels, channels, kernel_size=3, padding=1),
                 nn.ReLU(),
                 nn.Conv1d(channels, channels, kernel_size=3, padding=1)
