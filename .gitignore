@@ -163,3 +163,13 @@ cython_debug/
 #
 # VScode
 .vscode/settings.json
+
+# Ignore .spe and .vms files directly inside 'example_data' but keep those in sub-directories
+Automation/example_data/*.spe
+Automation/example_data/*.vms
+Automation/example_data/*.csv
+
+# Ignore any files/directories in example_data/data_vms
+Automation/example_data/data_vms/
+Automation/example_data/data_spe/
+
