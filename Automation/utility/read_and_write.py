@@ -14,7 +14,7 @@ def read_spectrum_meta_data(path, tools_to_read = ['H1', 'J4', 'K1', 'K4']):
         # if no such tool directory exists, continue to the next tool
         if not path_tool_data.exists():
             continue
-        paths = [Path(path) for path in path_tool_data.rglob('*.spe')]
+        paths = list(path_tool_data.rglob('*.spe'))
         # if no data found, continue to the next tool
         if len(paths) == 0:
             print(f'No data found for the tool: {tool}')
@@ -52,9 +52,9 @@ def copy_and_rename_spe(df, path_spe, dry_run=False):
     path_spe.mkdir(parents=True, exist_ok=True) 
     df_tmp['path_spe'] = df_tmp.apply(lambda x: path_spe/generate_standard_file_name(x, '.spe'), axis=1)
     # data copy
-    for index, row in df_tmp.iterrows():
+    for row in df_tmp.itertuples(index=False):
         if dry_run: break
-        shutil.copy2(row['path'], row['path_spe'])    
+        shutil.copy2(row.path, row.path_spe)    
     return df_tmp
 
 def copy_and_rename_vms(df, path_vms, dry_run=False):
@@ -65,21 +65,23 @@ def copy_and_rename_vms(df, path_vms, dry_run=False):
     
     # note that the file name may become low-cased
     # it will try without lowering the case first and then lowering case when the previous fails
-    df_tmp['path_spe_tranformed']       = df_tmp.apply(lambda x: x['path_spe'].parent / str(str(x['path_spe'].stem)+'.vms'), axis=1) 
-    df_tmp['path_spe_tranformed_lower'] = df_tmp.apply(lambda x: x['path_spe'].parent / str(str(x['path_spe'].stem).lower()+'.vms'), axis=1)
+    # df_tmp['path_spe_tranformed']       = df_tmp.apply(lambda x: x['path_spe'].parent / str(str(x['path_spe'].stem)+'.vms'), axis=1) 
+    # df_tmp['path_spe_tranformed_lower'] = df_tmp.apply(lambda x: x['path_spe'].parent / str(str(x['path_spe'].stem).lower()+'.vms'), axis=1)
+    df_tmp['path_spe_tranformed'] = df_tmp['path_spe'].apply(lambda x: x.with_suffix('.vms'))
+    df_tmp['path_spe_tranformed_lower'] = df_tmp['path_spe'].apply(lambda x: x.parent / f"{x.stem.lower()}.vms")
     
     # copy vms files
     missing_count = 0
     lower_case_used = False
     upper_case_used = False
-    for index, row in df_tmp.iterrows():
+    for row in df_tmp.itertuples(index=False):
         if dry_run: break
-        if row['path_spe_tranformed'].exists:
+        if row.path_spe_tranformed.exists():
             if not upper_case_used: upper_case_used = True
-            shutil.copy2(row['path_spe_tranformed'], row['path_vms'])
-        elif row['path_spe_tranformed_lower'].exists:
+            shutil.copy2(row.path_spe_tranformed, row.path_vms)
+        elif row.path_spe_tranformed_lower.exists():
             if not lower_case_used: lower_case_used = True
-            shutil.copy2(row['path_spe_tranformed_lower'], row['path_vms'])
+            shutil.copy2(row.path_spe_tranformed, row.path_vms)
         else:
             missing_count += 1
     
