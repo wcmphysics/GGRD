@@ -38,6 +38,7 @@ def read_spectrum_meta_data(path: Path, tools_to_read = None)-> pd.DataFrame:
             df_tmp['datetime'] = df_tmp['path'].apply(lambda x: x.parents[0].name.split('_')[1])
             df_tmp['datetime'] = pd.to_datetime(df_tmp['datetime'], format='%Y%m%d-%H%M%S')
             df_tmp['tool'] = tool
+            # TODO: no die info here
             # append the read meta data
             df_md = pd.concat([df_md, df_tmp[df_md.columns]], ignore_index=True)
     else:
@@ -60,7 +61,11 @@ def read_spectrum_meta_data(path: Path, tools_to_read = None)-> pd.DataFrame:
         df_tmp['datetime'] = df_tmp['path'].apply(lambda x: x.parents[0].name.split('_')[1])
         df_tmp['datetime'] = pd.to_datetime(df_tmp['datetime'], format='%Y%m%d-%H%M%S')
         df_tmp['tool'] = df_tmp['path'].apply(lambda x: tool_mapping[x.stem.split('.')[0]])
-        df_md = df_tmp
+        df_tmp['parent'] = df_tmp['path'].apply(lambda x: x.parents[0].name)
+        df_tmp['stem'] = df_tmp['path'].apply(lambda x: x.stem)
+        df_tmp = df_tmp.sort_values(by=['path']).reset_index(drop=True)
+        df_tmp['die'] = df_tmp.groupby(by=['parent', 'stem']).cumcount()
+        df_md = df_tmp.drop(['parent', 'stem'], axis=1)
 
     # fix data type
     df_md = df_md.convert_dtypes()
@@ -111,7 +116,7 @@ def create_paired_source_target_DataFrame(df_meta:pd.DataFrame, time_tolerance_i
             # duplicate datetime so it is not removed after merge_asof (since it is the merge reference)
             df_target['datetime_target'] = df_target['datetime']
             # apply merge_asof and calcualte time difference
-            df_source = pd.merge_asof(df_source, df_target, on='datetime', by='T7_code', direction='nearest', tolerance=time_tolerance_in_hours, suffixes=('','_target'))
+            df_source = pd.merge_asof(df_source, df_target, on='datetime', by=['die', 'T7_code'], direction='nearest', tolerance=time_tolerance_in_hours, suffixes=('','_target'))
             df_source['datetime_difference'] = df_source['datetime_target'] - df_source['datetime']
             df_source['datetime_difference'] = df_source['datetime_difference'].abs()
             lst.append(df_source)
