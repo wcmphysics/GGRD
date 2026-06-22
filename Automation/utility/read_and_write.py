@@ -1,5 +1,6 @@
 import pandas as pd
 from pathlib import Path
+import spe_xps_reader
 import shutil
 
 
@@ -132,6 +133,8 @@ def generate_standard_file_name(data_row, append=None):
     if append: file_name += str(append)
     return file_name
 
+
+
 def copy_and_rename_spe(df, path_spe, dry_run=False):    
     df_tmp = df.copy()
     path_spe.mkdir(parents=True, exist_ok=True) 
@@ -141,6 +144,8 @@ def copy_and_rename_spe(df, path_spe, dry_run=False):
         if dry_run: break
         shutil.copy2(row.path, row.path_spe)    
     return df_tmp
+
+
 
 def copy_and_rename_vms(df, path_vms, dry_run=False):
     df_tmp = df.copy()
@@ -175,4 +180,38 @@ def copy_and_rename_vms(df, path_vms, dry_run=False):
     print(f'Case used: Lower={lower_case_used}, Upper={upper_case_used}')
    
     return df_tmp
+
+
+
+def SPE_file_reader(df_meta, use_custom=False):
+    dct = dict()
+    if use_custom:
+        pass
+    else:
+        for path in df_meta['path']:
+            dct[path] = SPE_file_reader_single(path)
+    return dct
+
+
+
+def SPE_file_reader_single(path_to_file):    
+    # Use spe reader from: https://github.com/gkerherve/spe_reader  (pip install spe-xps-reader)
+    # Another possible reader: https://pypi.org/project/xps-export/ (pip install xps-export)
+    parsed = spe_xps_reader.extract_all_regions(path_to_file)
+    spectrum = dict()
+    # fill spectrum data
+    for region in parsed['regions_data']:
+        spectrum[region['name']] = dict()
+        spectrum[region['name']]['binding_energy'] = region['be_values']
+        spectrum[region['name']]['intensity'] = region['corrected_intensities']
+        spectrum[region['name']]['energy_range'] = (region['be_values'][0], region['be_values'][-1])
+        spectrum[region['name']]['energy_difference'] = region['be_values'][1] - region['be_values'][0] # TODO: this assume at least 2 data points       
+    return spectrum
+
+
+
+def SPE_file_reader_single_customized(path_to_file):
+    spectrum = dict()
+    # dummy function for future development
+    return spectrum
 
