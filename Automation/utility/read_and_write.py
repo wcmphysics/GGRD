@@ -2,7 +2,9 @@ import pandas as pd
 from pathlib import Path
 import spe_xps_reader
 import shutil
-
+import copy
+from scipy.interpolate import CubicSpline
+import numpy as np
 
 # meta data reading for XPS data
 def read_spectrum_meta_data(path: Path, tools_to_read = None)-> pd.DataFrame:    
@@ -188,6 +190,68 @@ def copy_and_rename_vms(df, path_vms, dry_run=False):
 
 
 
+def spectrum_specification_for_interpolation(spectra, scaling_factor=1, verbosity=1):
+    interpolation_specification = dict()
+    property_dict = {'region' : [], 
+                     'BE_min' : [], 
+                     'BE_max' : [], 
+                     'BE_step': [], 
+                     'I_min'  : [], 
+                     'I_max'  : [], 
+                     'number_of_points' : [],
+                     'path'   : [],
+                     }
+    # read properties for each spectrum
+    for path, spectrum in spectra.items():
+        for region, dct in spectrum.items():
+            property_dict['region'].append(region)
+            property_dict['BE_min'].append(dct['data']['binding_energy'].min())
+            property_dict['BE_max'].append(dct['data']['binding_energy'].max())
+            property_dict['BE_step'].append((dct['data']['binding_energy'].max()-dct['data']['binding_energy'].min())/(len(dct['data'])-1))
+            property_dict['I_min'].append(dct['data']['intensity'].min())
+            property_dict['I_max'].append(dct['data']['intensity'].max())
+            property_dict['number_of_points'].append(len(dct['data']))
+            property_dict['path'].append(path)
+    df = pd.DataFrame(property_dict)
+
+    # determine specification for interpolation
+    BE_step = df['BE_step'].abs().min()
+    for region in df['region'].unique():
+        df_tmp = df.query('region == @region')
+        interpolation_specification[region] = (df_tmp['BE_min'].max(), df_tmp['BE_max'].min(), BE_step/scaling_factor)
+
+    return interpolation_specification
+
+
+def interpolation_spline(spectra, interpolation_specification):
+    # interpolation_specification = {region:(BE_min, BE_max, BE_step)}
+    spectra_interpolated = copy.deepcopy(spectra)
+    for path, spectrum in spectra_interpolated.items():
+        for region, dct in spectrum.items():
+            # get data, sort (needed by spline), and create spline
+            df = dct['data']
+            df = df.sort_values(by=['binding_energy'], ascending=True, ignore_index=True)
+            spline = CubicSpline(df['binding_energy'], df['intensity'], extrapolate=True)
+            # setup BE grids
+            BE_start = interpolation_specification[region][0]
+            BE_end = interpolation_specification[region][1]
+            BE_step = interpolation_specification[region][2]
+            # grid points that does not cross BE_end
+            num_segments = int(np.floor((BE_end - BE_start) / BE_step))
+            truncated_end = BE_start + (num_segments * BE_step)
+            grid = np.linspace(BE_start, truncated_end, num=num_segments + 1)
+            # perform interpolation
+            df_tmp = pd.DataFrame({'binding_energy' : grid, 'intensity' : spline(grid)})
+            # update relavent data
+            dct['data'] = df_tmp
+            # dct['energy_range'] = (grid[0], grid[-1])
+            # dct['energy_start'] = grid[0]      
+            # dct['energy_step'] = grid[1] - grid[0]     
+
+    return spectra_interpolated
+
+
+
 def SPE_file_reader(df_meta, use_custom=False):
     dct = dict()
     if use_custom:
@@ -206,11 +270,14 @@ def SPE_file_reader_single(path_to_file):
     spectrum = dict()
     # fill spectrum data
     for region in parsed['regions_data']:
+        # TODO: maybe we can get rid off this extra ['data'] dictionary layer
         spectrum[region['name']] = dict()
-        spectrum[region['name']]['binding_energy'] = region['be_values']
-        spectrum[region['name']]['intensity'] = region['corrected_intensities']
-        spectrum[region['name']]['energy_range'] = (region['be_values'][0], region['be_values'][-1])
-        spectrum[region['name']]['energy_difference'] = region['be_values'][1] - region['be_values'][0] # TODO: this assume at least 2 data points       
+        # spectrum[region['name']]['binding_energy'] = region['be_values']
+        # spectrum[region['name']]['intensity'] = region['corrected_intensities']
+        spectrum[region['name']]['data'] = pd.DataFrame({'binding_energy' : region['be_values'], 'intensity' : region['corrected_intensities']})
+        # spectrum[region['name']]['energy_range'] = (region['be_values'][0], region['be_values'][-1])
+        # spectrum[region['name']]['energy_start'] = region['be_values'][0] # TODO: this assume at least 1 data point       
+        # spectrum[region['name']]['energy_step'] = region['be_values'][1] - region['be_values'][0] # TODO: this assume at least 2 data points       
     return spectrum
 
 
