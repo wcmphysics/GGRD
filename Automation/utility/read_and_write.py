@@ -4,36 +4,121 @@ import shutil
 
 
 # meta data reading for XPS data
-def read_spectrum_meta_data(path, tools_to_read = ['H1', 'J4', 'K1', 'K4']):    
-     #meta data for data
+def read_spectrum_meta_data(path: Path, tools_to_read = None)-> pd.DataFrame:    
+    # TODO: check path uniqueness
+    # tool mapping dictionary
+    tool_mapping = {'G94' : 'H1',
+                    'G40' : 'J4',
+                    'G43' : 'K1',
+                    'V3103' : 'K4',                    
+                    }
+    # meta data for data
     df_md = pd.DataFrame(columns=['tool', 'wafer_id', 'datetime', 'path', 'lot_id'])
     
-    for tool in tools_to_read:
-        # create the path for the tool
-        path_tool_data = path / tool
-        # if no such tool directory exists, continue to the next tool
-        if not path_tool_data.exists():
-            continue
-        paths = list(path_tool_data.rglob('*.spe'))
-        # if no data found, continue to the next tool
+    if tools_to_read is not None:
+        # when data was seperated by tool directories
+        for tool in tools_to_read:
+            # create the path for the tool
+            path_tool_data = path / tool
+            # if no such tool directory exists, continue to the next tool
+            if not path_tool_data.exists():
+                continue
+            paths = list(path_tool_data.rglob('*.spe'))
+            # if no data found, continue to the next tool
+            if len(paths) == 0:
+                print(f'No data found for the tool: {tool}')
+                continue
+            # start reading the meta data and create columns
+            # assume structure like:
+            # RawData_USERNAME_2026-05-29_09384401\NTA000004.0H\NTA000004.23_20260517-152621\G94.NTA000004.23.01.20260517.152441.spe
+            df_tmp = pd.DataFrame({'path': paths})
+            df_tmp['wafer_id'] = df_tmp['path'].apply(lambda x: x.parents[0].name.split('_')[0])
+            df_tmp['lot_id'] = df_tmp['path'].apply(lambda x: x.parents[1].name)
+            df_tmp['datetime'] = df_tmp['path'].apply(lambda x: x.parents[0].name.split('_')[1])
+            df_tmp['datetime'] = pd.to_datetime(df_tmp['datetime'], format='%Y%m%d-%H%M%S')
+            df_tmp['tool'] = tool
+            # append the read meta data
+            df_md = pd.concat([df_md, df_tmp[df_md.columns]], ignore_index=True)
+    else:
+        # when data was not seprated by tool directories
+        paths = list(path.rglob('*.spe'))
         if len(paths) == 0:
-            print(f'No data found for the tool: {tool}')
-            continue
-        # start reading the meta data and create columns
-        # assume structure like:
-        # RawData_USERNAME_2026-05-29_09384401\NTA000004.0H\NTA000004.23_20260517-152621\G94.NTA000004.23.01.20260517.152441.spe
+            raise Exception(f'No data found for the directory: {path}')
+        # hard-coded eraser for other non-relevent spe file in the path
+        # TODO: a more specific path for spe file search
+        paths_tmp = paths.copy()
+        to_remove = set()
+        for path in paths:
+            if 'RawData' not in str(path):
+                to_remove.add(path)
+        paths = list(set(paths) - to_remove)
+        # start reading
         df_tmp = pd.DataFrame({'path': paths})
         df_tmp['wafer_id'] = df_tmp['path'].apply(lambda x: x.parents[0].name.split('_')[0])
         df_tmp['lot_id'] = df_tmp['path'].apply(lambda x: x.parents[1].name)
         df_tmp['datetime'] = df_tmp['path'].apply(lambda x: x.parents[0].name.split('_')[1])
         df_tmp['datetime'] = pd.to_datetime(df_tmp['datetime'], format='%Y%m%d-%H%M%S')
-        df_tmp['tool'] = tool
-        # append the read meta data
-        df_md = pd.concat([df_md, df_tmp[df_md.columns]], ignore_index=True)
+        df_tmp['tool'] = df_tmp['path'].apply(lambda x: tool_mapping[x.stem.split('.')[0]])
+        df_md = df_tmp
 
     # fix data type
     df_md = df_md.convert_dtypes()
     return df_md
+
+
+
+def T7_reader(path_to_T7_data):
+    # TODO: check the actual file format
+    # TODO: remove so only 2 columns (lot id or wafer id and T7_code) remain
+    df = pd.read_csv(path_to_T7_data)
+    return df
+
+
+
+def meta_data_create_T7(df_meta, path_to_T7_data):
+    df_T7 = T7_reader(path_to_T7_data)
+    df_T7['lot'] = df_T7['lot_id'].apply(lambda x: str(x).split('.')[0])
+    df_tmp = df_meta.copy()
+    df_tmp['lot'] = df_tmp['wafer_id'].apply(lambda x: str(x).split('.')[0])
+
+    df_tmp = pd.merge(df_tmp, df_T7, on='lot', suffixes=('', '_y'))
+    df_tmp = df_tmp[list(df_meta.columns)+['T7_code']]
+    if any(df_tmp['T7_code'].isna()):
+        print(f'Missing T7 code for the following {sum(df_tmp['T7_code'].isna())} wafer(s):')
+        print(df_tmp[df_tmp['T7_code'].isna()]['wafer_id'])
+        raise Exception('Missing T7 code for certain wafer(s)')
+    return df_tmp
+
+
+
+def create_paired_source_target_DataFrame(df_meta:pd.DataFrame, time_tolerance_in_hours=12, filter_out_non_paired_data=False):
+    df_tmp = df_meta.copy()
+    df_tmp = df_tmp.sort_values('datetime') # merge_asof request sorted comparison key
+
+    # change tolerance time to time-delta object
+    time_tolerance_in_hours = pd.Timedelta(f'{time_tolerance_in_hours}h')
+
+    lst = []
+    tools = df_tmp['tool'].unique()
+    for tool_source in tools:
+        for tool_target in tools:
+            if tool_source == tool_target:
+                continue
+            # specify source and target tool
+            df_source = df_tmp.query('tool == @tool_source').copy()
+            df_target = df_tmp.query('tool == @tool_target').copy()
+            # duplicate datetime so it is not removed after merge_asof (since it is the merge reference)
+            df_target['datetime_target'] = df_target['datetime']
+            # apply merge_asof and calcualte time difference
+            df_source = pd.merge_asof(df_source, df_target, on='datetime', by='T7_code', direction='nearest', tolerance=time_tolerance_in_hours, suffixes=('','_target'))
+            df_source['datetime_difference'] = df_source['datetime_target'] - df_source['datetime']
+            df_source['datetime_difference'] = df_source['datetime_difference'].abs()
+            lst.append(df_source)
+    df_pair = pd.concat(lst)
+    df_pair = df_pair[list(df_meta.columns)+['tool_target', 'wafer_id_target', 'path_target', 'datetime_difference', 'datetime_target', ]]
+    if filter_out_non_paired_data:
+        df_pair.dropna(inplace=True, ignore_index=True)
+    return df_pair
 
 
 
