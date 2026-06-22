@@ -90,3 +90,4 @@ def copy_and_rename_vms(df, path_vms, dry_run=False):
     print(f'Case used: Lower={lower_case_used}, Upper={upper_case_used}')
    
     return df_tmp
+
