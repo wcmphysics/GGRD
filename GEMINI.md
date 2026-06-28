@@ -14,3 +14,5 @@ This is a Machine Learning project. It relies heavily on scikit-learn for model 
    - Do not modify raw input data files (`csv_input.csv`, `excel_test_data.xlsx`).
 3. **Code Style:** Use strict PEP-8 formatting. Include type hints and concise docstrings for all new functions.
 4. **Jupyter Notebooks:** If you need to edit `.ipynb` files, be careful to preserve the JSON structure, but prefer putting reusable logic into `.py` files inside `ML/utility/` and importing them into the notebooks.
+5. **Git Commits and Pushing:** When making commits and push, you MUST ALWAYS show me the commit message before any commit and push. Only after I approve will you do the commits and push.
+6. **Commit Size:** When the change is more than 50 lines, try to separate the commits and so one commit is readable and will not be flooded with changes.
